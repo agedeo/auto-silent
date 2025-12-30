@@ -72,11 +72,11 @@ def create_database(elements):
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS locations (
             id INTEGER PRIMARY KEY,
-            lat REAL,
-            lon REAL,
-            type TEXT,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL,
+            type TEXT NOT NULL,
             name TEXT,
-            region_id TEXT
+            region_id TEXT NOT NULL
         )
     ''')
 
