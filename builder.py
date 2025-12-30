@@ -11,10 +11,16 @@ DB_FILENAME = "silent_locations_nl.db"
 JSON_FILENAME = "version.json"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
-# De verbeterde query (gebruikt ISO code NL)
+# 1. Identificatie (Cruciaal! Anders blokkeert Overpass je)
+HEADERS = {
+    'User-Agent': 'SilentModeAppBuilder/1.0 (github-action-test)',
+    'Referer': 'https://github.com/jouwnaam/silent-app' 
+}
+
+# De query
 QUERY = """
 [out:json][timeout:180];
-area["ISO3166-1"="NL"][admin_level=2]->.searchArea;
+area["ISO3166-1"="NL"]["admin_level"="2"]->.searchArea;
 (
   nwr["amenity"~"^(place_of_worship|theatre|cinema|crematorium|funeral_hall)$"](area.searchArea);
 );
@@ -27,18 +33,26 @@ def ensure_dir():
 
 def fetch_osm_data():
     print("⏳ Data ophalen bij OpenStreetMap...")
-    # BELANGRIJK: We sturen de query nu als key-value paar 'data'
-    response = requests.post(OVERPASS_URL, data={'data': QUERY})
+    print(f"   Target URL: {OVERPASS_URL}")
+    
+    # We voegen de HEADERS toe aan het verzoek
+    response = requests.post(OVERPASS_URL, data={'data': QUERY}, headers=HEADERS)
     
     if response.status_code == 200:
         try:
             return response.json()['elements']
         except json.JSONDecodeError:
-            raise Exception("De server gaf geen geldige JSON terug. Misschien te druk?")
+            print("❌ FOUT: Server gaf geen geldige JSON terug.")
+            print(f"Inhoud: {response.text[:500]}") # Print eerste 500 tekens
+            raise Exception("Ongeldige JSON response")
     else:
-        # Print de foutmelding van de server voor betere debugging
-        print(f"Server antwoord: {response.text}")
-        raise Exception(f"Error fetching data: {response.status_code}")
+        # DIT is wat we moeten zien als het fout gaat:
+        print(f"❌ HTTP Fout {response.status_code}")
+        print("🔍 Server antwoord (De reden):")
+        print("------------------------------------------------")
+        print(response.text) 
+        print("------------------------------------------------")
+        raise Exception(f"Fout bij ophalen data: {response.status_code}")
 
 def create_database(elements):
     print(f"🔨 Database aanmaken met {len(elements)} items...")
@@ -63,7 +77,6 @@ def create_database(elements):
 
     count = 0
     for el in elements:
-        # Overpass geeft soms nodes, soms ways. Center is altijd veilig.
         lat = el.get('lat') or el.get('center', {}).get('lat')
         lon = el.get('lon') or el.get('center', {}).get('lon')
         tags = el.get('tags', {})
@@ -109,5 +122,5 @@ if __name__ == "__main__":
         count = create_database(data)
         create_metadata(count)
     except Exception as e:
-        print(f"❌ Fout: {e}")
+        print(f"❌ Script gestopt door fout: {e}")
         exit(1)
