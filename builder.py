@@ -14,7 +14,7 @@ OVERPASS_URL = "http://overpass-api.de/api/interpreter"
 # De query (NL)
 QUERY = """
 [out:json][timeout:180];
-{{geocodeArea:Nederland}}->.searchArea;
+area["name"="Nederland"]["admin_level"="2"]->.searchArea;
 (
   nwr["amenity"~"^(place_of_worship|theatre|cinema|crematorium|funeral_hall)$"](area.searchArea);
 );
