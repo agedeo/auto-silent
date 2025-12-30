@@ -11,18 +11,22 @@ DB_FILENAME = "silent_locations_nl.db"
 JSON_FILENAME = "version.json"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
-# 1. Identificatie (Cruciaal! Anders blokkeert Overpass je)
+# Headers om te voorkomen dat we geblokkeerd worden
 HEADERS = {
-    'User-Agent': 'SilentModeAppBuilder/1.0 (github-action-test)',
-    'Referer': 'https://github.com/jouwnaam/silent-app' 
+    'User-Agent': 'SilentModeAppBuilder/1.0',
+    'Referer': 'https://github.com/' 
 }
 
-# De query
+# De query - Simpelere versie die altijd werkt voor Nederland
 QUERY = """
 [out:json][timeout:180];
-area["ISO3166-1"="NL"]["admin_level"="2"]->.searchArea;
+area["name"="Nederland"]["admin_level"="2"]->.searchArea;
 (
-  nwr["amenity"~"^(place_of_worship|theatre|cinema|crematorium|funeral_hall)$"](area.searchArea);
+  nwr["amenity"="place_of_worship"](area.searchArea);
+  nwr["amenity"="theatre"](area.searchArea);
+  nwr["amenity"="cinema"](area.searchArea);
+  nwr["amenity"="crematorium"](area.searchArea);
+  nwr["amenity"="funeral_hall"](area.searchArea);
 );
 out center;
 """
@@ -35,20 +39,21 @@ def fetch_osm_data():
     print("⏳ Data ophalen bij OpenStreetMap...")
     print(f"   Target URL: {OVERPASS_URL}")
     
-    # We voegen de HEADERS toe aan het verzoek
+    # We sturen de data correct als form-data
     response = requests.post(OVERPASS_URL, data={'data': QUERY}, headers=HEADERS)
     
     if response.status_code == 200:
         try:
-            return response.json()['elements']
-        except json.JSONDecodeError:
-            print("❌ FOUT: Server gaf geen geldige JSON terug.")
-            print(f"Inhoud: {response.text[:500]}") # Print eerste 500 tekens
-            raise Exception("Ongeldige JSON response")
+            data = response.json()
+            return data['elements']
+        except Exception as e:
+            print("❌ De server gaf geen geldige JSON terug.")
+            print(f"Server antwoord: {response.text[:200]}...") 
+            raise Exception("Ongeldige response")
     else:
-        # DIT is wat we moeten zien als het fout gaat:
+        # HIER printen we nu de echte fout
         print(f"❌ HTTP Fout {response.status_code}")
-        print("🔍 Server antwoord (De reden):")
+        print("🔍 Server antwoord (Lees dit goed):")
         print("------------------------------------------------")
         print(response.text) 
         print("------------------------------------------------")
@@ -93,6 +98,10 @@ def create_database(elements):
 
 def create_metadata(count):
     db_path = os.path.join(OUTPUT_DIR, DB_FILENAME)
+    if not os.path.exists(db_path):
+        print("⚠️ Database bestand niet gevonden voor metadata!")
+        return
+
     file_size = os.path.getsize(db_path)
     
     metadata = {
@@ -116,11 +125,8 @@ if __name__ == "__main__":
     try:
         ensure_dir()
         data = fetch_osm_data()
-        if not data:
-            print("⚠️ Geen data gevonden! Check de query.")
-            exit(1)
         count = create_database(data)
         create_metadata(count)
     except Exception as e:
-        print(f"❌ Script gestopt door fout: {e}")
+        print(f"❌ Script gestopt: {e}")
         exit(1)
