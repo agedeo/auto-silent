@@ -6,15 +6,15 @@ import time
 from datetime import datetime
 
 # Instellingen
-OUTPUT_DIR = "public"  # Map voor GitHub Pages
+OUTPUT_DIR = "public"
 DB_FILENAME = "silent_locations_nl.db"
 JSON_FILENAME = "version.json"
-OVERPASS_URL = "http://overpass-api.de/api/interpreter"
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
-# De query (NL)
+# De verbeterde query (gebruikt ISO code NL)
 QUERY = """
 [out:json][timeout:180];
-area["name"="Nederland"]["admin_level"="2"]->.searchArea;
+area["ISO3166-1"="NL"][admin_level=2]->.searchArea;
 (
   nwr["amenity"~"^(place_of_worship|theatre|cinema|crematorium|funeral_hall)$"](area.searchArea);
 );
@@ -27,14 +27,21 @@ def ensure_dir():
 
 def fetch_osm_data():
     print("⏳ Data ophalen bij OpenStreetMap...")
-    response = requests.post(OVERPASS_URL, data=QUERY)
+    # BELANGRIJK: We sturen de query nu als key-value paar 'data'
+    response = requests.post(OVERPASS_URL, data={'data': QUERY})
+    
     if response.status_code == 200:
-        return response.json()['elements']
+        try:
+            return response.json()['elements']
+        except json.JSONDecodeError:
+            raise Exception("De server gaf geen geldige JSON terug. Misschien te druk?")
     else:
+        # Print de foutmelding van de server voor betere debugging
+        print(f"Server antwoord: {response.text}")
         raise Exception(f"Error fetching data: {response.status_code}")
 
 def create_database(elements):
-    print("🔨 Database aanmaken...")
+    print(f"🔨 Database aanmaken met {len(elements)} items...")
     db_path = os.path.join(OUTPUT_DIR, DB_FILENAME)
     
     if os.path.exists(db_path):
@@ -56,6 +63,7 @@ def create_database(elements):
 
     count = 0
     for el in elements:
+        # Overpass geeft soms nodes, soms ways. Center is altijd veilig.
         lat = el.get('lat') or el.get('center', {}).get('lat')
         lon = el.get('lon') or el.get('center', {}).get('lon')
         tags = el.get('tags', {})
@@ -67,11 +75,10 @@ def create_database(elements):
 
     conn.commit()
     conn.close()
-    print(f"✅ Database klaar: {count} locaties.")
+    print(f"✅ Database klaar: {count} locaties opgeslagen.")
     return count
 
 def create_metadata(count):
-    # Maak een manifest bestandje voor de app
     db_path = os.path.join(OUTPUT_DIR, DB_FILENAME)
     file_size = os.path.getsize(db_path)
     
@@ -96,6 +103,9 @@ if __name__ == "__main__":
     try:
         ensure_dir()
         data = fetch_osm_data()
+        if not data:
+            print("⚠️ Geen data gevonden! Check de query.")
+            exit(1)
         count = create_database(data)
         create_metadata(count)
     except Exception as e:
