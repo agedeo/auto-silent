@@ -71,7 +71,7 @@ def create_database(elements):
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS locations (
-            id INTEGER PRIMARY KEY,
+            id INTEGER PRIMARY KEY NOT NULL,  -- <--- HIER ZIT DE FIX (NOT NULL toegevoegd)
             lat REAL NOT NULL,
             lon REAL NOT NULL,
             type TEXT NOT NULL,
