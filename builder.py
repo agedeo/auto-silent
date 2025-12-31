@@ -16,14 +16,32 @@ HEADERS = {
     'Referer': 'https://github.com/' 
 }
 
-QUERY = """
-[out:json][timeout:180];
-area["name"="Nederland"]["admin_level"="2"]->.searchArea;
+OVERPASS_QUERY = """
+[out:json];
 (
-  nwr["amenity"="place_of_worship"](area.searchArea);
-  nwr["amenity"="theatre"](area.searchArea);
-  nwr["amenity"="cinema"](area.searchArea);
-  nwr["amenity"="library"](area.searchArea);
+  // KERKEN (Religie) - Strengere filters
+  node["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
+  way["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
+  rel["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
+
+  // THEATERS & CONCERTZALEN
+  node["amenity"="theatre"](50.7,3.3,53.7,7.3);
+  way["amenity"="theatre"](50.7,3.3,53.7,7.3);
+  rel["amenity"="theatre"](50.7,3.3,53.7,7.3);
+  
+  node["amenity"="arts_centre"](50.7,3.3,53.7,7.3);
+  way["amenity"="arts_centre"](50.7,3.3,53.7,7.3);
+  rel["amenity"="arts_centre"](50.7,3.3,53.7,7.3);
+
+  // BIOSCOPEN
+  node["amenity"="cinema"](50.7,3.3,53.7,7.3);
+  way["amenity"="cinema"](50.7,3.3,53.7,7.3);
+  rel["amenity"="cinema"](50.7,3.3,53.7,7.3);
+
+  // BIBLIOTHEKEN
+  node["amenity"="library"](50.7,3.3,53.7,7.3);
+  way["amenity"="library"](50.7,3.3,53.7,7.3);
+  rel["amenity"="library"](50.7,3.3,53.7,7.3);
 );
 out center;
 """
