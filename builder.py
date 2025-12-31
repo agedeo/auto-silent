@@ -7,16 +7,17 @@ from datetime import datetime
 
 # --- INSTELLINGEN ---
 OUTPUT_DIR = "public"
-DB_FILENAME = "silent_locations.db"
+DB_FILENAME = "silent_locations.db" 
 JSON_FILENAME = "version.json"
+# We gebruiken hier de main instance, maar met een hogere timeout
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 HEADERS = {
-    'User-Agent': 'SilentModeAppBuilder/2.3', # Versie weer iets opgehoogd
-    'Referer': 'https://github.com/'
+    'User-Agent': 'SilentModeAppBuilder/2.4', 
+    'Referer': 'https://github.com/' 
 }
 
-# Let op: De variabele heet OVERPASS_QUERY
+# AANGEPASTE QUERY MET TIMEOUT (900 seconden = 15 minuten)
 OVERPASS_QUERY = """
 [out:json][timeout:900];
 (
@@ -52,14 +53,14 @@ def ensure_dir():
         os.makedirs(OUTPUT_DIR)
 
 def fetch_osm_data():
-    print("⏳ Data ophalen bij OpenStreetMap...")
+    print("⏳ Data ophalen bij OpenStreetMap (kan even duren)...")
     try:
-        # HIER ZAT DE FOUT: 'QUERY' vervangen door 'OVERPASS_QUERY'
+        # Hier gebruiken we de juiste variabele OVERPASS_QUERY
         response = requests.post(OVERPASS_URL, data={'data': OVERPASS_QUERY}, headers=HEADERS)
         response.raise_for_status()
         return response.json()['elements']
     except Exception as e:
-        print(f"❌ Fout: {e}")
+        print(f"❌ Fout bij ophalen data: {e}")
         exit(1)
 
 def map_category(osm_tag):
@@ -118,14 +119,13 @@ def create_database(elements):
         name = tags.get('name', 'Naamloos')
         amenity = tags.get('amenity', '')
         
-        # --- NIEUW: EXTRA FILTER VOOR KAPELLEN ---
-        # We controleren de naam op 'kapel' of 'chapel' om zeker te zijn dat ze geen stiltezone worden.
+        # --- KAPELLEN FILTER ---
+        # Extra check: als 'kapel' of 'chapel' in de naam staat, slaan we hem over.
         name_lower = name.lower()
         if 'kapel' in name_lower or 'chapel' in name_lower:
-            # We slaan deze over, hij komt NIET in de database
             excluded_count += 1
             continue
-        # -----------------------------------------
+        # -----------------------
 
         app_category = map_category(amenity)
         full_address = construct_address(tags)
@@ -137,7 +137,8 @@ def create_database(elements):
     conn.commit()
     conn.close()
     print(f"✅ Database '{DB_FILENAME}' klaar: {count} locaties.")
-    print(f"🧹 {excluded_count} kapellen succesvol gefilterd en weggelaten.")
+    if excluded_count > 0:
+        print(f"🧹 {excluded_count} kapellen succesvol gefilterd en weggelaten.")
     return count
 
 def create_metadata(count):
