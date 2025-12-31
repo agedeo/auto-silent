@@ -12,7 +12,7 @@ JSON_FILENAME = "version.json"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 HEADERS = {
-    'User-Agent': 'SilentModeAppBuilder/2.1',
+    'User-Agent': 'SilentModeAppBuilder/2.2', # Versie opgehoogd
     'Referer': 'https://github.com/' 
 }
 
@@ -49,6 +49,22 @@ def map_category(osm_tag):
     if osm_tag == "library": return "library"
     return "church" 
 
+def construct_address(tags):
+    # Probeer een net adres te maken
+    street = tags.get('addr:street', '')
+    number = tags.get('addr:housenumber', '')
+    city = tags.get('addr:city', '')
+    
+    address = f"{street} {number}".strip()
+    if address and city:
+        return f"{address}, {city}"
+    elif city:
+        return city
+    elif address:
+        return address
+    else:
+        return "Adres onbekend"
+
 def create_database(elements):
     print(f"🔨 Database aanmaken met {len(elements)} items...")
     db_path = os.path.join(OUTPUT_DIR, DB_FILENAME)
@@ -59,14 +75,15 @@ def create_database(elements):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # --- HIER ZIT DE FIX: NOT NULL TOEGEVOEGD ---
+    # NIEUWE KOLOM TOEGEVOEGD: address
     cursor.execute('''
         CREATE TABLE locations (
             id INTEGER PRIMARY KEY NOT NULL,
             name TEXT NOT NULL,
             lat REAL NOT NULL,
             lon REAL NOT NULL,
-            category TEXT NOT NULL
+            category TEXT NOT NULL,
+            address TEXT NOT NULL
         )
     ''')
 
@@ -81,9 +98,12 @@ def create_database(elements):
         name = tags.get('name', 'Naamloos')
         amenity = tags.get('amenity', '')
         app_category = map_category(amenity)
+        
+        # Adres bouwen
+        full_address = construct_address(tags)
 
-        cursor.execute('INSERT INTO locations VALUES (?, ?, ?, ?, ?)', 
-                       (el.get('id'), name, lat, lon, app_category))
+        cursor.execute('INSERT INTO locations VALUES (?, ?, ?, ?, ?, ?)', 
+                       (el.get('id'), name, lat, lon, app_category, full_address))
         count += 1
 
     conn.commit()
