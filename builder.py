@@ -7,26 +7,28 @@ from datetime import datetime
 
 # --- INSTELLINGEN ---
 OUTPUT_DIR = "public"
-DB_FILENAME = "silent_locations.db" 
+DB_FILENAME = "silent_locations.db"
 JSON_FILENAME = "version.json"
-# We gebruiken hier de main instance, maar met een hogere timeout
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+
+# OPLOSSING 1: We gebruiken een 'Mirror' server. Deze is vaak sneller en minder streng.
+# Alternatief als deze ook faalt: "https://lz4.overpass-api.de/api/interpreter"
+OVERPASS_URL = "https://overpass.kumi.systems/api/interpreter"
 
 HEADERS = {
-    'User-Agent': 'SilentModeAppBuilder/2.4', 
-    'Referer': 'https://github.com/' 
+    'User-Agent': 'SilentModeAppBuilder/3.0', 
+    'Referer': 'https://github.com/'
 }
 
-# AANGEPASTE QUERY MET TIMEOUT (900 seconden = 15 minuten)
+# OPLOSSING 2: [maxsize:...] toegevoegd zodat hij meer geheugen mag gebruiken.
 OVERPASS_QUERY = """
-[out:json][timeout:900];
+[out:json][timeout:900][maxsize:1073741824];
 (
   // KERKEN (Religie)
   node["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
   way["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
   rel["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
 
-  // THEATERS & CONCERTZALEN
+  // THEATERS
   node["amenity"="theatre"](50.7,3.3,53.7,7.3);
   way["amenity"="theatre"](50.7,3.3,53.7,7.3);
   rel["amenity"="theatre"](50.7,3.3,53.7,7.3);
@@ -53,14 +55,22 @@ def ensure_dir():
         os.makedirs(OUTPUT_DIR)
 
 def fetch_osm_data():
-    print("⏳ Data ophalen bij OpenStreetMap (kan even duren)...")
+    print(f"⏳ Data ophalen bij {OVERPASS_URL}...")
     try:
-        # Hier gebruiken we de juiste variabele OVERPASS_QUERY
-        response = requests.post(OVERPASS_URL, data={'data': OVERPASS_QUERY}, headers=HEADERS)
+        # We voegen hier ook een timeout toe aan requests zelf, voor de zekerheid
+        response = requests.post(OVERPASS_URL, data={'data': OVERPASS_QUERY}, headers=HEADERS, timeout=900)
+        
+        if response.status_code == 429:
+            print("❌ Te veel verzoeken (Rate Limit). Wacht even en probeer opnieuw.")
+            exit(1)
+        if response.status_code == 504:
+            print("❌ Server Timeout. Probeer het script later opnieuw of gebruik een kleinere regio.")
+            exit(1)
+            
         response.raise_for_status()
         return response.json()['elements']
     except Exception as e:
-        print(f"❌ Fout bij ophalen data: {e}")
+        print(f"❌ Fout bij verbinding: {e}")
         exit(1)
 
 def map_category(osm_tag):
@@ -119,13 +129,12 @@ def create_database(elements):
         name = tags.get('name', 'Naamloos')
         amenity = tags.get('amenity', '')
         
-        # --- KAPELLEN FILTER ---
-        # Extra check: als 'kapel' of 'chapel' in de naam staat, slaan we hem over.
+        # --- KAPELLEN FILTER (Python Side) ---
         name_lower = name.lower()
         if 'kapel' in name_lower or 'chapel' in name_lower:
             excluded_count += 1
             continue
-        # -----------------------
+        # -------------------------------------
 
         app_category = map_category(amenity)
         full_address = construct_address(tags)
@@ -138,7 +147,7 @@ def create_database(elements):
     conn.close()
     print(f"✅ Database '{DB_FILENAME}' klaar: {count} locaties.")
     if excluded_count > 0:
-        print(f"🧹 {excluded_count} kapellen succesvol gefilterd en weggelaten.")
+        print(f"🧹 {excluded_count} kapellen succesvol gefilterd.")
     return count
 
 def create_metadata(count):
