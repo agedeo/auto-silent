@@ -7,19 +7,20 @@ from datetime import datetime
 
 # --- INSTELLINGEN ---
 OUTPUT_DIR = "public"
-DB_FILENAME = "silent_locations.db" 
+DB_FILENAME = "silent_locations.db"
 JSON_FILENAME = "version.json"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 HEADERS = {
-    'User-Agent': 'SilentModeAppBuilder/2.2', # Versie opgehoogd
-    'Referer': 'https://github.com/' 
+    'User-Agent': 'SilentModeAppBuilder/2.3', # Versie weer iets opgehoogd
+    'Referer': 'https://github.com/'
 }
 
+# Let op: De variabele heet OVERPASS_QUERY
 OVERPASS_QUERY = """
 [out:json];
 (
-  // KERKEN (Religie) - Strengere filters
+  // KERKEN (Religie) - We sluiten hier al zoveel mogelijk uit
   node["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
   way["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
   rel["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
@@ -28,7 +29,7 @@ OVERPASS_QUERY = """
   node["amenity"="theatre"](50.7,3.3,53.7,7.3);
   way["amenity"="theatre"](50.7,3.3,53.7,7.3);
   rel["amenity"="theatre"](50.7,3.3,53.7,7.3);
-  
+   
   node["amenity"="arts_centre"](50.7,3.3,53.7,7.3);
   way["amenity"="arts_centre"](50.7,3.3,53.7,7.3);
   rel["amenity"="arts_centre"](50.7,3.3,53.7,7.3);
@@ -53,7 +54,8 @@ def ensure_dir():
 def fetch_osm_data():
     print("⏳ Data ophalen bij OpenStreetMap...")
     try:
-        response = requests.post(OVERPASS_URL, data={'data': QUERY}, headers=HEADERS)
+        # HIER ZAT DE FOUT: 'QUERY' vervangen door 'OVERPASS_QUERY'
+        response = requests.post(OVERPASS_URL, data={'data': OVERPASS_QUERY}, headers=HEADERS)
         response.raise_for_status()
         return response.json()['elements']
     except Exception as e:
@@ -68,7 +70,6 @@ def map_category(osm_tag):
     return "church" 
 
 def construct_address(tags):
-    # Probeer een net adres te maken
     street = tags.get('addr:street', '')
     number = tags.get('addr:housenumber', '')
     city = tags.get('addr:city', '')
@@ -93,7 +94,6 @@ def create_database(elements):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # NIEUWE KOLOM TOEGEVOEGD: address
     cursor.execute('''
         CREATE TABLE locations (
             id INTEGER PRIMARY KEY NOT NULL,
@@ -106,6 +106,8 @@ def create_database(elements):
     ''')
 
     count = 0
+    excluded_count = 0
+
     for el in elements:
         lat = el.get('lat') or el.get('center', {}).get('lat')
         lon = el.get('lon') or el.get('center', {}).get('lon')
@@ -115,9 +117,17 @@ def create_database(elements):
         tags = el.get('tags', {})
         name = tags.get('name', 'Naamloos')
         amenity = tags.get('amenity', '')
-        app_category = map_category(amenity)
         
-        # Adres bouwen
+        # --- NIEUW: EXTRA FILTER VOOR KAPELLEN ---
+        # We controleren de naam op 'kapel' of 'chapel' om zeker te zijn dat ze geen stiltezone worden.
+        name_lower = name.lower()
+        if 'kapel' in name_lower or 'chapel' in name_lower:
+            # We slaan deze over, hij komt NIET in de database
+            excluded_count += 1
+            continue
+        # -----------------------------------------
+
+        app_category = map_category(amenity)
         full_address = construct_address(tags)
 
         cursor.execute('INSERT INTO locations VALUES (?, ?, ?, ?, ?, ?)', 
@@ -127,6 +137,7 @@ def create_database(elements):
     conn.commit()
     conn.close()
     print(f"✅ Database '{DB_FILENAME}' klaar: {count} locaties.")
+    print(f"🧹 {excluded_count} kapellen succesvol gefilterd en weggelaten.")
     return count
 
 def create_metadata(count):
