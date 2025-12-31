@@ -18,9 +18,9 @@ HEADERS = {
 
 # Let op: De variabele heet OVERPASS_QUERY
 OVERPASS_QUERY = """
-[out:json];
+[out:json][timeout:900];
 (
-  // KERKEN (Religie) - We sluiten hier al zoveel mogelijk uit
+  // KERKEN (Religie)
   node["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
   way["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
   rel["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
