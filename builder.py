@@ -14,11 +14,11 @@ JSON_FILENAME = "version.json"
 OVERPASS_URL = "https://overpass.kumi.systems/api/interpreter"
 
 HEADERS = {
-    'User-Agent': 'SilentModeAppBuilder/4.0', 
+    'User-Agent': 'SilentModeAppBuilder/4.1', 
     'Referer': 'https://github.com/'
 }
 
-# QUERY UPDATE: Alle nieuwe categorieën zijn toegevoegd
+# QUERY UPDATE: Alle categorieën
 OVERPASS_QUERY = """
 [out:json][timeout:900][maxsize:1073741824];
 (
@@ -91,7 +91,6 @@ def fetch_osm_data():
         print(f"❌ Fout bij verbinding: {e}")
         exit(1)
 
-# AANGEPASTE FUNCTIE: Kijkt nu naar de hele 'tags' dictionary
 def map_category(tags):
     amenity = tags.get('amenity', '')
     tourism = tags.get('tourism', '')
@@ -116,7 +115,7 @@ def map_category(tags):
     # 5. Religie (Fallback)
     if amenity == "place_of_worship": return "church"
     
-    return "church" # Veiligheidshalve
+    return "church" 
 
 def construct_address(tags):
     street = tags.get('addr:street', '')
@@ -171,15 +170,32 @@ def create_database(elements):
         if 'kapel' in name_lower or 'chapel' in name_lower:
             excluded_count += 1
             continue
-        # -----------------------
 
-        # Hier geven we nu de hele 'tags' mee in plaats van alleen amenity
         app_category = map_category(tags)
         full_address = construct_address(tags)
 
-        cursor.execute('INSERT INTO locations VALUES (?, ?, ?, ?, ?, ?)', 
-                       (el.get('id'), name, lat, lon, app_category, full_address))
-        count += 1
+        # --- FIX VOOR UNIQUE ID ERROR ---
+        # We maken het ID uniek door er een groot getal bij op te tellen
+        # afhankelijk van het type (node, way, relation).
+        osm_id = el.get('id')
+        osm_type = el.get('type')
+        
+        unique_id = osm_id
+        if osm_type == 'way':
+            unique_id = osm_id + 10_000_000_000  # Way ID + 10 miljard
+        elif osm_type == 'relation':
+            unique_id = osm_id + 20_000_000_000  # Relation ID + 20 miljard
+        
+        # ---------------------------------
+
+        try:
+            cursor.execute('INSERT INTO locations VALUES (?, ?, ?, ?, ?, ?)', 
+                           (unique_id, name, lat, lon, app_category, full_address))
+            count += 1
+        except sqlite3.IntegrityError:
+            # Als er ondanks de fix toch nog een dubbele is, slaan we hem over ipv crashen
+            print(f"⚠️ Dubbel ID overgeslagen: {unique_id}")
+            continue
 
     conn.commit()
     conn.close()
