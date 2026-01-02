@@ -10,42 +10,61 @@ OUTPUT_DIR = "public"
 DB_FILENAME = "silent_locations.db"
 JSON_FILENAME = "version.json"
 
-# OPLOSSING 1: We gebruiken een 'Mirror' server. Deze is vaak sneller en minder streng.
-# Alternatief als deze ook faalt: "https://lz4.overpass-api.de/api/interpreter"
+# We gebruiken de Kumi Systems mirror voor betere performance
 OVERPASS_URL = "https://overpass.kumi.systems/api/interpreter"
 
 HEADERS = {
-    'User-Agent': 'SilentModeAppBuilder/3.0', 
+    'User-Agent': 'SilentModeAppBuilder/4.0', 
     'Referer': 'https://github.com/'
 }
 
-# OPLOSSING 2: [maxsize:...] toegevoegd zodat hij meer geheugen mag gebruiken.
+# QUERY UPDATE: Alle nieuwe categorieën zijn toegevoegd
 OVERPASS_QUERY = """
 [out:json][timeout:900][maxsize:1073741824];
 (
-  // KERKEN (Religie)
+  // 1. KERKEN (Religie) - Kapellen uitgesloten
   node["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
   way["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
   rel["amenity"="place_of_worship"]["building"!="chapel"]["building"!="shrine"]["building"!="wayside_shrine"]["amenity"!="wayside_shrine"]["historic"!="wayside_shrine"](50.7,3.3,53.7,7.3);
 
-  // THEATERS
-  node["amenity"="theatre"](50.7,3.3,53.7,7.3);
-  way["amenity"="theatre"](50.7,3.3,53.7,7.3);
-  rel["amenity"="theatre"](50.7,3.3,53.7,7.3);
-   
-  node["amenity"="arts_centre"](50.7,3.3,53.7,7.3);
-  way["amenity"="arts_centre"](50.7,3.3,53.7,7.3);
-  rel["amenity"="arts_centre"](50.7,3.3,53.7,7.3);
+  // 2. CULTUUR (Theaters, Bioscopen, Arts Centres)
+  node["amenity"~"^(theatre|cinema|arts_centre)$"](50.7,3.3,53.7,7.3);
+  way["amenity"~"^(theatre|cinema|arts_centre)$"](50.7,3.3,53.7,7.3);
+  rel["amenity"~"^(theatre|cinema|arts_centre)$"](50.7,3.3,53.7,7.3);
 
-  // BIOSCOPEN
-  node["amenity"="cinema"](50.7,3.3,53.7,7.3);
-  way["amenity"="cinema"](50.7,3.3,53.7,7.3);
-  rel["amenity"="cinema"](50.7,3.3,53.7,7.3);
-
-  // BIBLIOTHEKEN
+  // 3. BIBLIOTHEKEN
   node["amenity"="library"](50.7,3.3,53.7,7.3);
   way["amenity"="library"](50.7,3.3,53.7,7.3);
   rel["amenity"="library"](50.7,3.3,53.7,7.3);
+
+  // 4. GEMEENSCHAPSHUIZEN (Buurthuizen)
+  node["amenity"="community_centre"](50.7,3.3,53.7,7.3);
+  way["amenity"="community_centre"](50.7,3.3,53.7,7.3);
+  rel["amenity"="community_centre"](50.7,3.3,53.7,7.3);
+
+  // 5. MUSEA
+  node["tourism"="museum"](50.7,3.3,53.7,7.3);
+  way["tourism"="museum"](50.7,3.3,53.7,7.3);
+  rel["tourism"="museum"](50.7,3.3,53.7,7.3);
+
+  // 6. ROUW & HERDENKING (Begraafplaatsen, Crematoria)
+  node["landuse"="cemetery"](50.7,3.3,53.7,7.3);
+  way["landuse"="cemetery"](50.7,3.3,53.7,7.3);
+  rel["landuse"="cemetery"](50.7,3.3,53.7,7.3);
+  
+  node["amenity"~"^(funeral_hall|crematorium)$"](50.7,3.3,53.7,7.3);
+  way["amenity"~"^(funeral_hall|crematorium)$"](50.7,3.3,53.7,7.3);
+  rel["amenity"~"^(funeral_hall|crematorium)$"](50.7,3.3,53.7,7.3);
+
+  // 7. ZIEKENHUIZEN
+  node["amenity"="hospital"](50.7,3.3,53.7,7.3);
+  way["amenity"="hospital"](50.7,3.3,53.7,7.3);
+  rel["amenity"="hospital"](50.7,3.3,53.7,7.3);
+
+  // 8. OVERHEID (Rechtbanken, Gemeentehuizen)
+  node["amenity"~"^(courthouse|townhall)$"](50.7,3.3,53.7,7.3);
+  way["amenity"~"^(courthouse|townhall)$"](50.7,3.3,53.7,7.3);
+  rel["amenity"~"^(courthouse|townhall)$"](50.7,3.3,53.7,7.3);
 );
 out center;
 """
@@ -57,14 +76,13 @@ def ensure_dir():
 def fetch_osm_data():
     print(f"⏳ Data ophalen bij {OVERPASS_URL}...")
     try:
-        # We voegen hier ook een timeout toe aan requests zelf, voor de zekerheid
         response = requests.post(OVERPASS_URL, data={'data': OVERPASS_QUERY}, headers=HEADERS, timeout=900)
         
         if response.status_code == 429:
             print("❌ Te veel verzoeken (Rate Limit). Wacht even en probeer opnieuw.")
             exit(1)
         if response.status_code == 504:
-            print("❌ Server Timeout. Probeer het script later opnieuw of gebruik een kleinere regio.")
+            print("❌ Server Timeout. Probeer het script later opnieuw.")
             exit(1)
             
         response.raise_for_status()
@@ -73,12 +91,32 @@ def fetch_osm_data():
         print(f"❌ Fout bij verbinding: {e}")
         exit(1)
 
-def map_category(osm_tag):
-    if osm_tag == "place_of_worship": return "church"
-    if osm_tag == "theatre": return "theater"
-    if osm_tag == "cinema": return "cinema"
-    if osm_tag == "library": return "library"
-    return "church" 
+# AANGEPASTE FUNCTIE: Kijkt nu naar de hele 'tags' dictionary
+def map_category(tags):
+    amenity = tags.get('amenity', '')
+    tourism = tags.get('tourism', '')
+    landuse = tags.get('landuse', '')
+    
+    # 1. Cultuur & Entertainment
+    if amenity == "cinema": return "cinema"
+    if amenity == "theatre" or amenity == "arts_centre": return "theater"
+    if tourism == "museum": return "museum"
+    if amenity == "library": return "library"
+
+    # 2. Vereniging
+    if amenity == "community_centre": return "community"
+
+    # 3. Zorg & Rouw
+    if amenity == "hospital": return "hospital"
+    if landuse == "cemetery" or amenity in ["funeral_hall", "crematorium"]: return "cemetery"
+
+    # 4. Overheid
+    if amenity in ["courthouse", "townhall"]: return "government"
+
+    # 5. Religie (Fallback)
+    if amenity == "place_of_worship": return "church"
+    
+    return "church" # Veiligheidshalve
 
 def construct_address(tags):
     street = tags.get('addr:street', '')
@@ -127,16 +165,16 @@ def create_database(elements):
 
         tags = el.get('tags', {})
         name = tags.get('name', 'Naamloos')
-        amenity = tags.get('amenity', '')
         
-        # --- KAPELLEN FILTER (Python Side) ---
+        # --- KAPELLEN FILTER ---
         name_lower = name.lower()
         if 'kapel' in name_lower or 'chapel' in name_lower:
             excluded_count += 1
             continue
-        # -------------------------------------
+        # -----------------------
 
-        app_category = map_category(amenity)
+        # Hier geven we nu de hele 'tags' mee in plaats van alleen amenity
+        app_category = map_category(tags)
         full_address = construct_address(tags)
 
         cursor.execute('INSERT INTO locations VALUES (?, ?, ?, ?, ?, ?)', 
