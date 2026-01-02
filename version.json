@@ -1,0 +1,12 @@
+{
+  "last_updated": "2026-01-02 08:08:21",
+  "timestamp": 1767341301,
+  "regions": [
+    {
+      "id": "nl",
+      "file": "silent_locations.db",
+      "count": 38159,
+      "size_bytes": 3092480
+    }
+  ]
+}
